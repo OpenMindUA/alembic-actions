@@ -36,6 +36,7 @@ Safely applies Alembic migrations to a production or staging database with optio
 | `alembic_ini` | The path to the `alembic.ini` file | Yes | `alembic.ini` |
 | `migration_path` | The path to the Alembic migrations directory | Yes | `migrations` |
 | `revision_range` | Optional revision range for SQL generation (e.g., 'head:base') | No | `head` |
+| `pr_revisions_only` | Only generate SQL for migrations in the current PR | No | `true` |
 
 ## Example Usage
 
@@ -108,7 +109,24 @@ jobs:
           dialect: "mysql"
           alembic_ini: "./config/alembic.ini"
           migration_path: "./db/migrations"
-          revision_range: "head:base"  # Generate SQL for all changes in the PR
+          revision_range: "head:base"  # Use this if you want all migrations
+          pr_revisions_only: "true"    # Only show migrations from the current PR
+```
+
+### Using PR-only Migrations vs. Full History
+
+By default (`pr_revisions_only: "true"`), the action will only show SQL for migration files added or modified in the current PR. This helps reviewers focus on the changes being proposed without seeing unrelated migrations.
+
+If you want to show the full migration history up to the current HEAD, set `pr_revisions_only: "false"`:
+
+```yaml
+- name: Check Alembic Migrations and Generate SQL (Full History)
+  uses: OpenMindUA/alembic-actions/actions/alembic-review@v1
+  with:
+    dialect: "postgresql"
+    alembic_ini: "alembic.ini"
+    migration_path: "migrations"
+    pr_revisions_only: "false"  # Show all migrations up to head
 ```
 
 ## How It Works

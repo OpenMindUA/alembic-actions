@@ -22,6 +22,10 @@ inputs:
     description: "Optional revision range for SQL generation (e.g., 'head:base')"
     required: false
     default: "head"
+  pr_revisions_only:
+    description: "Only generate SQL for migrations in the current PR (true/false)"
+    required: false
+    default: "true"
 
 runs:
   using: "composite"
@@ -58,11 +62,18 @@ runs:
       id: generate_sql
       shell: bash
       run: |
+        # Add pr-revisions-only parameter conditionally
+        PR_ONLY=""
+        if [ "${{ inputs.pr_revisions_only }}" = "true" ]; then
+          PR_ONLY="--pr-revisions-only"
+        fi
+
         uv run python ${{ github.action_path }}/../../shared/scripts/generate_sql.py --generate-sql \
           --dialect ${{ inputs.dialect }} \
           --alembic-ini ${{ inputs.alembic_ini }} \
           --migration-path ${{ inputs.migration_path }} \
           --revision-range ${{ inputs.revision_range }} \
+          $PR_ONLY \
           --verbose
 
     - name: Add SQL to PR comment
