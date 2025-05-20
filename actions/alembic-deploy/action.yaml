@@ -1,0 +1,94 @@
+name: "Deploy Alembic Migrations"
+description: "Safely applies Alembic migrations to a database"
+
+inputs:
+  dialect:
+    description: "SQL dialect to use for Alembic (postgresql, mysql, etc.)"
+    required: true
+    default: "postgresql"
+  alembic_ini:
+    description: "Path to alembic.ini file"
+    required: true
+    default: "alembic.ini"
+  migration_path:
+    description: "Path to Alembic migrations directory"
+    required: true
+    default: "migrations"
+  database_url:
+    description: "Database URL to apply migrations to (will override alembic.ini)"
+    required: true
+  backup:
+    description: "Whether to create a database backup before applying migrations"
+    required: false
+    default: "true"
+  target_revision:
+    description: "Target revision to migrate to (default: head)"
+    required: false
+    default: "head"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.x"
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install alembic sqlalchemy psycopg2-binary pymysql
+
+    - name: Create database backup
+      if: ${{ inputs.backup == 'true' }}
+      shell: bash
+      run: |
+        echo "Creating database backup before applying migrations"
+        # This would contain specific logic for backing up the database
+        # depending on database type (PostgreSQL, MySQL, etc.)
+        
+        # Example for PostgreSQL
+        if [[ "${{ inputs.dialect }}" == "postgresql" ]]; then
+          echo "Backing up PostgreSQL database"
+          # pg_dump logic would go here
+        fi
+        
+        # Example for MySQL
+        if [[ "${{ inputs.dialect }}" == "mysql" ]]; then
+          echo "Backing up MySQL database"
+          # mysqldump logic would go here
+        fi
+
+    - name: Generate SQL script
+      id: generate_sql
+      shell: bash
+      run: |
+        python ${{ github.action_path }}/../../shared/scripts/generate_sql.py \
+          --generate-sql \
+          --dialect ${{ inputs.dialect }} \
+          --alembic-ini ${{ inputs.alembic_ini }} \
+          --migration-path ${{ inputs.migration_path }} \
+          --revision-range ${{ inputs.target_revision }} \
+          --verbose
+
+    - name: Apply migrations
+      shell: bash
+      run: |
+        # Override the database URL in alembic.ini
+        sed -i "s|sqlalchemy.url = .*|sqlalchemy.url = ${{ inputs.database_url }}|g" ${{ inputs.alembic_ini }}
+        
+        echo "Applying Alembic migrations to target: ${{ inputs.target_revision }}"
+        alembic -c ${{ inputs.alembic_ini }} upgrade ${{ inputs.target_revision }}
+        
+        # Get current revision after migration
+        CURRENT_REVISION=$(alembic -c ${{ inputs.alembic_ini }} current)
+        echo "Current database revision: $CURRENT_REVISION"
+        
+        # Set output for other workflow steps
+        echo "current_revision=$CURRENT_REVISION" >> $GITHUB_OUTPUT

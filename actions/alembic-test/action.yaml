@@ -1,0 +1,82 @@
+name: "Test Alembic Migrations"
+description: "Runs tests for Alembic migrations to ensure they work correctly"
+
+inputs:
+  dialect:
+    description: "SQL dialect to use for Alembic tests (postgresql, mysql, etc.)"
+    required: true
+    default: "postgresql"
+  alembic_ini:
+    description: "Path to alembic.ini file"
+    required: true
+    default: "alembic.ini"
+  migration_path:
+    description: "Path to Alembic migrations directory"
+    required: true
+    default: "migrations"
+  database_url:
+    description: "Database URL for testing migrations"
+    required: true
+  test_data_script:
+    description: "Optional script to load test data"
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.x"
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install alembic sqlalchemy psycopg2-binary pymysql
+
+    - name: Check for Alembic migrations
+      id: check_migrations
+      shell: bash
+      run: |
+        python ${{ github.action_path }}/../../shared/scripts/generate_sql.py --check-migrations --migration-path ${{ inputs.migration_path }} --verbose
+
+    - name: Set up test database
+      if: steps.check_migrations.outputs.has_migrations == 'true'
+      shell: bash
+      run: |
+        echo "Setting up test database for migration testing"
+        # This would typically create a temporary database or container
+        # for testing the migrations
+
+    - name: Run migrations on test database
+      if: steps.check_migrations.outputs.has_migrations == 'true'
+      shell: bash
+      run: |
+        # Override the alembic.ini with test database URL
+        sed -i "s|sqlalchemy.url = .*|sqlalchemy.url = ${{ inputs.database_url }}|g" ${{ inputs.alembic_ini }}
+        
+        # Run the migrations
+        alembic -c ${{ inputs.alembic_ini }} upgrade head
+        
+        # Load test data if provided
+        if [ -n "${{ inputs.test_data_script }}" ]; then
+          python ${{ inputs.test_data_script }}
+        fi
+
+    - name: Test migrations can be reversed
+      if: steps.check_migrations.outputs.has_migrations == 'true'
+      shell: bash
+      run: |
+        # Test that migrations can be downgraded
+        alembic -c ${{ inputs.alembic_ini }} downgrade base
+        
+        # Test that they can be re-applied
+        alembic -c ${{ inputs.alembic_ini }} upgrade head
+        
+        echo "Migration tests successful"

@@ -1,0 +1,100 @@
+name: Test Actions
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'actions/**'
+      - 'shared/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'actions/**'
+      - 'shared/**'
+  workflow_dispatch:
+
+jobs:
+  test-alembic-review:
+    runs-on: ubuntu-latest
+    name: Test Alembic Review Action
+
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: testdb
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Test Alembic Review Action
+        uses: ./actions/alembic-review
+        with:
+          alembic_ini_path: 'tests/fixtures/alembic.ini'
+          dialect: 'postgresql'
+
+  test-alembic-test:
+    runs-on: ubuntu-latest
+    name: Test Alembic Test Action
+
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: testdb
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Test Alembic Test Action
+        uses: ./actions/alembic-test
+        with:
+          alembic_ini_path: 'tests/fixtures/alembic.ini'
+          database_url: 'postgresql://testuser:testpassword@localhost/testdb'
+
+  test-alembic-deploy:
+    runs-on: ubuntu-latest
+    name: Test Alembic Deploy Action
+
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: testdb
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Test Alembic Deploy Action
+        uses: ./actions/alembic-deploy
+        with:
+          alembic_ini_path: 'tests/fixtures/alembic.ini'
+          database_url: 'postgresql://testuser:testpassword@localhost/testdb'
+          dry_run: 'true'
