@@ -100,5 +100,5 @@ runs:
             repo: context.repo.repo,
             body: commentBody
           });
-        env:
-          DIALECT: ${{ inputs.dialect }}
+      env:
+        DIALECT: ${{ inputs.dialect }}

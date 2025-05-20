@@ -39,7 +39,7 @@ jobs:
       - name: Test Alembic Review Action
         uses: ./actions/alembic-review
         with:
-          alembic_ini_path: 'tests/fixtures/alembic.ini'
+          alembic_ini: 'tests/fixtures/alembic.ini'
           dialect: 'postgresql'
 
   test-alembic-test:
@@ -67,7 +67,7 @@ jobs:
       - name: Test Alembic Test Action
         uses: ./actions/alembic-test
         with:
-          alembic_ini_path: 'tests/fixtures/alembic.ini'
+          alembic_ini: 'tests/fixtures/alembic.ini'
           database_url: 'postgresql://testuser:testpassword@localhost/testdb'
 
   test-alembic-deploy:
@@ -95,6 +95,6 @@ jobs:
       - name: Test Alembic Deploy Action
         uses: ./actions/alembic-deploy
         with:
-          alembic_ini_path: 'tests/fixtures/alembic.ini'
+          alembic_ini: 'tests/fixtures/alembic.ini'
           database_url: 'postgresql://testuser:testpassword@localhost/testdb'
-          dry_run: 'true'
+          backup: 'false'
