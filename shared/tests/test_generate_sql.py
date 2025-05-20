@@ -1,7 +1,7 @@
 import os
 import subprocess
 import sys
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import MagicMock, mock_open, patch, ANY
 
 import pytest
 
@@ -88,18 +88,29 @@ def test_generate_sql_success():
 
         generate_sql("postgresql", "migrations/alembic.ini")
 
-        mock_run.assert_called_with(
-            [
-                "alembic",
-                "-c",
-                "migrations/alembic.ini",
-                "upgrade",
-                "head",
-                "--sql",
-                "--dialect=postgresql",
-            ],
-            check=True,
-        )
+        # Check if subprocess.run was called with the correct command
+        assert mock_run.call_count == 1
+
+        # Extract the arguments from the actual call
+        args, kwargs = mock_run.call_args
+
+        # Check that the command is correct
+        assert args[0] == [
+            "alembic",
+            "-c",
+            "migrations/alembic.ini",
+            "upgrade",
+            "head",
+            "--sql",
+        ]
+
+        # Check that check=True was passed
+        assert kwargs.get("check") == True
+
+        # Check that env contains ALEMBIC_DIALECT with the correct value
+        assert "env" in kwargs
+        assert "ALEMBIC_DIALECT" in kwargs["env"]
+        assert kwargs["env"]["ALEMBIC_DIALECT"] == "postgresql"
 
         assert mock_log.call_count >= 2
 
@@ -117,18 +128,29 @@ def test_generate_sql_with_custom_options():
             range_option="base:head",
         )
 
-        mock_run.assert_called_with(
-            [
-                "alembic",
-                "-c",
-                "custom/alembic.ini",
-                "upgrade",
-                "base:head",
-                "--sql",
-                "--dialect=mysql",
-            ],
-            check=True,
-        )
+        # Check if subprocess.run was called with the correct command
+        assert mock_run.call_count == 1
+
+        # Extract the arguments from the actual call
+        args, kwargs = mock_run.call_args
+
+        # Check that the command is correct
+        assert args[0] == [
+            "alembic",
+            "-c",
+            "custom/alembic.ini",
+            "upgrade",
+            "base:head",
+            "--sql",
+        ]
+
+        # Check that check=True was passed
+        assert kwargs.get("check") == True
+
+        # Check that env contains ALEMBIC_DIALECT with the correct value
+        assert "env" in kwargs
+        assert "ALEMBIC_DIALECT" in kwargs["env"]
+        assert kwargs["env"]["ALEMBIC_DIALECT"] == "mysql"
 
 
 def test_generate_sql_missing_alembic_ini():
