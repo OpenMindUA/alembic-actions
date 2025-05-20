@@ -1,5 +1,5 @@
-from logging.config import fileConfig
 import os
+from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
@@ -45,7 +45,7 @@ def run_migrations_offline():
         # Create a dummy URL for SQL generation with the specified dialect
         url = f"{dialect_name}://"
 
-    render_as_batch = (dialect_name == "sqlite" if dialect_name else False)
+    render_as_batch = dialect_name == "sqlite" if dialect_name else False
 
     context.configure(
         url=url,
@@ -83,12 +83,10 @@ def run_migrations_online():
 
     with connectable.connect() as connection:
         # Set render_as_batch for SQLite dialect
-        render_as_batch = (dialect_name == "sqlite" if dialect_name else False)
+        render_as_batch = dialect_name == "sqlite" if dialect_name else False
 
         context.configure(
-            connection=connection,
-            target_metadata=target_metadata,
-            render_as_batch=render_as_batch
+            connection=connection, target_metadata=target_metadata, render_as_batch=render_as_batch
         )
 
         with context.begin_transaction():

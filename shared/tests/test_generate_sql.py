@@ -1,7 +1,7 @@
 import os
 import subprocess
 import sys
-from unittest.mock import MagicMock, mock_open, patch, ANY
+from unittest.mock import ANY, MagicMock, mock_open, patch
 
 import pytest
 
