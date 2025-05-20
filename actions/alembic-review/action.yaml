@@ -1,6 +1,10 @@
 name: "Check Alembic Migrations and Generate SQL"
 description: "Checks for Alembic migrations in a pull request, generates SQL for the specified dialect, and adds it as a PR comment"
 
+# Note: This action requires the following permissions:
+# - contents: read
+# - pull-requests: write
+
 inputs:
   dialect:
     description: "SQL dialect to use for Alembic (postgresql, mysql, etc.)"

@@ -17,6 +17,9 @@ jobs:
   test-alembic-review:
     runs-on: ubuntu-latest
     name: Test Alembic Review Action
+    permissions:
+      contents: read
+      pull-requests: write
 
     services:
       postgres:

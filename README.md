@@ -51,6 +51,10 @@ on:
 jobs:
   check-migrations:
     runs-on: ubuntu-latest
+    # These permissions are needed for PR comments
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -79,6 +83,10 @@ on:
 jobs:
   check-migrations:
     runs-on: ubuntu-latest
+    # These permissions are needed for PR comments
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
