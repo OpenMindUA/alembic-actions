@@ -63,17 +63,21 @@ def generate_sql(dialect, alembic_ini, migration_path="migrations", range_option
             "upgrade",
             range_option or "head",
             "--sql",
-            f"--dialect={dialect}",
         ]
+
+        # Alembic doesn't directly support a --dialect flag
+        # We'll modify the environment variables instead
+        env = os.environ.copy()
+        env["ALEMBIC_DIALECT"] = dialect
 
         logger.info(f"Executing: {' '.join(command)}")
 
         # For tests, we need to match the expected call
         if "pytest" in sys.modules:
-            subprocess.run(command, check=True)
+            subprocess.run(command, check=True, env=env)
         else:
             with open("generated.sql", "w") as output_file:
-                subprocess.run(command, check=True, stdout=output_file)
+                subprocess.run(command, check=True, stdout=output_file, env=env)
 
         logger.info("SQL generation completed. Output saved to generated.sql.")
     except subprocess.CalledProcessError as e:
