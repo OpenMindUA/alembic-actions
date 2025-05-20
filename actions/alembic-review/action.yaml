@@ -47,14 +47,14 @@ runs:
       id: check_migrations
       shell: bash
       run: |
-        python ${{ github.action_path }}/../../shared/scripts/generate_sql.py --check-migrations --migration-path ${{ inputs.migration_path }} --verbose
+        uv run python ${{ github.action_path }}/../../shared/scripts/generate_sql.py --check-migrations --migration-path ${{ inputs.migration_path }} --verbose
 
     - name: Generate SQL from Alembic migrations
       if: steps.check_migrations.outputs.has_migrations == 'true'
       id: generate_sql
       shell: bash
       run: |
-        python ${{ github.action_path }}/../../shared/scripts/generate_sql.py --generate-sql \
+        uv run python ${{ github.action_path }}/../../shared/scripts/generate_sql.py --generate-sql \
           --dialect ${{ inputs.dialect }} \
           --alembic-ini ${{ inputs.alembic_ini }} \
           --migration-path ${{ inputs.migration_path }} \

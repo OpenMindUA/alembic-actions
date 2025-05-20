@@ -49,7 +49,7 @@ runs:
       id: check_migrations
       shell: bash
       run: |
-        python ${{ github.action_path }}/../../shared/scripts/generate_sql.py --check-migrations --migration-path ${{ inputs.migration_path }} --verbose
+        uv run python ${{ github.action_path }}/../../shared/scripts/generate_sql.py --check-migrations --migration-path ${{ inputs.migration_path }} --verbose
 
     - name: Set up test database
       if: steps.check_migrations.outputs.has_migrations == 'true'
@@ -65,13 +65,13 @@ runs:
       run: |
         # Override the alembic.ini with test database URL
         sed -i "s|sqlalchemy.url = .*|sqlalchemy.url = ${{ inputs.database_url }}|g" ${{ inputs.alembic_ini }}
-        
+
         # Run the migrations
-        alembic -c ${{ inputs.alembic_ini }} upgrade head
-        
+        uv run alembic -c ${{ inputs.alembic_ini }} upgrade head
+
         # Load test data if provided
         if [ -n "${{ inputs.test_data_script }}" ]; then
-          python ${{ inputs.test_data_script }}
+          uv run python ${{ inputs.test_data_script }}
         fi
 
     - name: Test migrations can be reversed
@@ -79,9 +79,9 @@ runs:
       shell: bash
       run: |
         # Test that migrations can be downgraded
-        alembic -c ${{ inputs.alembic_ini }} downgrade base
-        
+        uv run alembic -c ${{ inputs.alembic_ini }} downgrade base
+
         # Test that they can be re-applied
-        alembic -c ${{ inputs.alembic_ini }} upgrade head
-        
+        uv run alembic -c ${{ inputs.alembic_ini }} upgrade head
+
         echo "Migration tests successful"
