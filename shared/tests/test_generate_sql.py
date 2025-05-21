@@ -175,3 +175,152 @@ def test_generate_sql_subprocess_error():
             generate_sql("postgresql", "migrations/alembic.ini")
 
         mock_log.assert_called_with(f"Error generating SQL: {error}")
+
+
+def test_generate_sql_with_nonexistent_revision():
+    """Test handling of specific revisions that don't exist in migration history."""
+    with patch("os.path.exists", return_value=True), patch("subprocess.run") as mock_run, patch(
+        "builtins.open", mock_open()
+    ), patch("logging.Logger.warning") as mock_warning, patch("logging.Logger.error") as mock_error:
+
+        # Mock the subprocess calls to simulate revision not found scenario
+        def subprocess_side_effect(command, **kwargs):
+            if "history" in command:
+                # Simulate "alembic history" failing for nonexistent revision
+                raise subprocess.CalledProcessError(255, command)
+            elif "show" in command:
+                # Simulate "alembic show" also failing for nonexistent revision
+                raise subprocess.CalledProcessError(255, command)
+            else:
+                # For other commands, return success
+                mock_result = MagicMock()
+                mock_result.stdout = "-- Sample SQL output\n"
+                return mock_result
+
+        mock_run.side_effect = subprocess_side_effect
+
+        # Call generate_sql with a specific revision that doesn't exist
+        generate_sql(
+            dialect="postgresql",
+            alembic_ini="migrations/alembic.ini",
+            specific_revisions=["34d7a17ebdd5"],
+        )
+
+        # Verify that warning and error messages were logged appropriately
+        mock_warning.assert_called()
+        mock_error.assert_called_with("Revision 34d7a17ebdd5 does not exist. Skipping.")
+
+
+def test_generate_sql_with_pr_migrations():
+    """Test generating SQL using PR migration parsing."""
+    from shared.scripts.alembic_utils import MigrationInfo
+
+    with patch("os.path.exists", return_value=True), patch("subprocess.run") as mock_run, patch(
+        "builtins.open", mock_open()
+    ) as mock_file, patch("shared.scripts.generate_sql.MigrationManager") as mock_manager_class:
+
+        # Create mock manager instance
+        mock_manager = MagicMock()
+        mock_manager_class.return_value = mock_manager
+
+        # Mock PR migrations
+        mock_migrations = {
+            "abc123": MigrationInfo("abc123", "migrations/versions/001_test.py", None),
+            "def456": MigrationInfo("def456", "migrations/versions/002_test.py", "abc123"),
+        }
+        mock_manager.get_migrations_from_pr.return_value = mock_migrations
+        mock_manager.get_migration_order.return_value = ["abc123", "def456"]
+
+        # Mock successful subprocess calls
+        mock_result = MagicMock()
+        mock_result.stdout = "-- SQL content here --\n"
+        mock_run.return_value = mock_result
+
+        generate_sql(
+            dialect="postgresql",
+            alembic_ini="migrations/alembic.ini",
+            specific_revisions=["abc123", "def456"],
+        )
+
+        # Verify that MigrationManager was instantiated correctly
+        mock_manager_class.assert_called_once_with("migrations")
+
+        # Verify that get_migrations_from_pr was called
+        mock_manager.get_migrations_from_pr.assert_called()
+
+        # Verify that get_migration_order was called with the right migrations
+        mock_manager.get_migration_order.assert_called_once_with(mock_migrations)
+
+        # Verify subprocess calls for each migration
+        assert mock_run.call_count == 2
+
+        # Check first migration call (base:abc123)
+        first_call = mock_run.call_args_list[0]
+        assert first_call[0][0] == [
+            "alembic",
+            "-c",
+            "migrations/alembic.ini",
+            "upgrade",
+            "base:abc123",
+            "--sql",
+        ]
+
+        # Check second migration call (abc123:def456)
+        second_call = mock_run.call_args_list[1]
+        assert second_call[0][0] == [
+            "alembic",
+            "-c",
+            "migrations/alembic.ini",
+            "upgrade",
+            "abc123:def456",
+            "--sql",
+        ]
+
+
+def test_generate_sql_with_merge_migration():
+    """Test generating SQL for merge migrations."""
+    from shared.scripts.alembic_utils import MigrationInfo
+
+    with patch("os.path.exists", return_value=True), patch("subprocess.run") as mock_run, patch(
+        "builtins.open", mock_open()
+    ) as mock_file, patch("shared.scripts.generate_sql.MigrationManager") as mock_manager_class:
+
+        # Create mock manager instance
+        mock_manager = MagicMock()
+        mock_manager_class.return_value = mock_manager
+
+        # Mock merge migration
+        mock_migrations = {
+            "merge123": MigrationInfo(
+                "merge123", "migrations/versions/003_merge.py", ["abc123", "def456"]
+            ),
+        }
+        mock_manager.get_migrations_from_pr.return_value = mock_migrations
+        mock_manager.get_migration_order.return_value = ["merge123"]
+
+        # Mock successful subprocess calls
+        mock_result = MagicMock()
+        mock_result.stdout = "-- Merge SQL content --\n"
+        mock_run.return_value = mock_result
+
+        generate_sql(
+            dialect="postgresql",
+            alembic_ini="migrations/alembic.ini",
+            specific_revisions=["merge123"],
+        )
+
+        # Verify subprocess call uses base:merge123 for merge migrations
+        mock_run.assert_called_once()
+        call_args = mock_run.call_args_list[0]
+        assert call_args[0][0] == [
+            "alembic",
+            "-c",
+            "migrations/alembic.ini",
+            "upgrade",
+            "base:merge123",
+            "--sql",
+        ]
+
+        # Since we're not actually writing files during pytest, we verify the manager was called
+        mock_manager.get_migrations_from_pr.assert_called()
+        mock_manager.get_migration_order.assert_called_once_with(mock_migrations)

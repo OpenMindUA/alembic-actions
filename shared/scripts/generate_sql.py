@@ -3,6 +3,17 @@ import logging
 import os
 import subprocess
 import sys
+from typing import Dict, List, Optional
+
+try:
+    from .alembic_utils import MigrationManager, get_migration_order, get_migrations_from_pr
+except ImportError:
+    # For when the module is run directly
+    from alembic_utils import (  # type: ignore
+        MigrationManager,
+        get_migration_order,
+        get_migrations_from_pr,
+    )
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -69,6 +80,161 @@ def check_migrations(migration_path="migrations"):
         sys.exit(1)
 
 
+class SQLGenerator:
+    """Generates SQL from Alembic migrations."""
+
+    def __init__(self, dialect: str, alembic_ini: str, migration_path: str = "migrations"):
+        self.dialect = dialect
+        self.alembic_ini = alembic_ini
+        self.migration_manager = MigrationManager(migration_path)
+
+        if not os.path.exists(alembic_ini):
+            raise FileNotFoundError(f"alembic.ini not found at {alembic_ini}")
+
+    def _build_alembic_command(self, range_spec: str) -> List[str]:
+        """Build an alembic upgrade command with SQL output."""
+        return ["alembic", "-c", self.alembic_ini, "upgrade", range_spec, "--sql"]
+
+    def _get_environment(self) -> Dict[str, str]:
+        """Get environment variables for alembic command."""
+        env = os.environ.copy()
+        env["ALEMBIC_DIALECT"] = self.dialect
+        return env
+
+    def _execute_alembic_command(self, command: List[str]) -> str:
+        """Execute an alembic command and return the SQL output."""
+        env = self._get_environment()
+        logger.info(f"Executing: {' '.join(command)}")
+
+        if "pytest" in sys.modules:
+            # For testing, just run the command without capturing output
+            subprocess.run(command, check=True, env=env)
+            return "-- Test SQL output --"
+        else:
+            result = subprocess.run(command, capture_output=True, text=True, check=True, env=env)
+            return result.stdout
+
+    def _get_range_spec_for_migration(self, migration_info, all_migrations: Dict) -> str:
+        """Determine the appropriate range specification for a migration."""
+        down_revisions = migration_info.get_down_revisions()
+
+        if not down_revisions:
+            # First migration - upgrade from base
+            return f"base:{migration_info.revision}"
+        elif migration_info.is_merge:
+            # For merge migrations, use base to get the full change
+            return f"base:{migration_info.revision}"
+        else:
+            # Single parent migration - use incremental approach
+            return f"{down_revisions[0]}:{migration_info.revision}"
+
+    def _format_migration_header(self, migration_info) -> str:
+        """Format a header comment for a migration."""
+        merge_comment = ""
+        if migration_info.is_merge:
+            parents = ", ".join(migration_info.get_down_revisions())
+            merge_comment = f" (MERGE from {parents})"
+
+        return f"\n-- Migration: {migration_info.revision}{merge_comment} --\n"
+
+    def _generate_sql_for_specific_revisions(self, specific_revisions: List[str]) -> str:
+        """Generate SQL for specific revision IDs."""
+        all_sql = []
+
+        # Get migration information from PR files
+        pr_migrations = self.migration_manager.get_migrations_from_pr()
+
+        # Filter to only the requested revisions
+        requested_migrations = {
+            rev: info for rev, info in pr_migrations.items() if rev in specific_revisions
+        }
+
+        if not requested_migrations:
+            logger.warning("No migration files found for the specified revisions in the current PR")
+            # Fallback to original behavior for revisions not in PR
+            for revision in specific_revisions:
+                try:
+                    sql = self._generate_fallback_sql(revision)
+                    all_sql.append(f"\n-- Migration: {revision} --\n")
+                    all_sql.append(sql)
+                except subprocess.CalledProcessError:
+                    logger.error(f"Revision {revision} does not exist. Skipping.")
+                    all_sql.append(
+                        f"\n-- Migration: {revision} (SKIPPED - revision not found) --\n"
+                    )
+        else:
+            # Get the correct order for migrations
+            ordered_revisions = self.migration_manager.get_migration_order(requested_migrations)
+
+            for revision in ordered_revisions:
+                if revision not in specific_revisions:
+                    continue
+
+                migration_info = requested_migrations[revision]
+                logger.info(f"Generating SQL for revision: {revision}")
+
+                try:
+                    range_spec = self._get_range_spec_for_migration(
+                        migration_info, requested_migrations
+                    )
+                    command = self._build_alembic_command(range_spec)
+                    sql_output = self._execute_alembic_command(command)
+
+                    all_sql.append(self._format_migration_header(migration_info))
+                    all_sql.append(sql_output)
+
+                except subprocess.CalledProcessError as e:
+                    logger.error(f"Error generating SQL for revision {revision}: {e}")
+                    header = self._format_migration_header(migration_info)
+                    error_header = header.replace(" --", " (ERROR - failed to generate SQL) --")
+                    all_sql.append(error_header)
+
+        return "".join(all_sql)
+
+    def _generate_fallback_sql(self, revision: str) -> str:
+        """Generate SQL for a revision using fallback alembic commands."""
+        # First check if revision exists
+        check_cmd = ["alembic", "-c", self.alembic_ini, "show", revision]
+        subprocess.run(check_cmd, capture_output=True, text=True, check=True)
+
+        # Generate SQL
+        command = self._build_alembic_command(f"base:{revision}")
+        return self._execute_alembic_command(command)
+
+    def generate_sql(
+        self,
+        range_option: Optional[str] = None,
+        specific_revisions: Optional[List[str]] = None,
+        output_file: str = "generated.sql",
+    ) -> None:
+        """
+        Generate SQL from Alembic migrations.
+
+        Args:
+            range_option: Optional revision range to generate SQL for (e.g., 'head', 'head:base')
+            specific_revisions: Optional list of specific revision IDs to generate SQL for
+            output_file: Path to save the generated SQL
+        """
+        try:
+            if specific_revisions and (range_option == "head" or range_option is None):
+                sql_content = self._generate_sql_for_specific_revisions(specific_revisions)
+            else:
+                # Standard approach
+                command = self._build_alembic_command(range_option or "head")
+                sql_content = self._execute_alembic_command(command)
+
+            # Write SQL to file (except during testing)
+            if "pytest" not in sys.modules:
+                with open(output_file, "w") as f:
+                    f.write(sql_content)
+
+            logger.info(f"SQL generation completed. Output saved to {output_file}.")
+
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Error generating SQL: {e}")
+            sys.exit(1)
+
+
 def generate_sql(
     dialect, alembic_ini, migration_path="migrations", range_option=None, specific_revisions=None
 ):
@@ -82,135 +248,11 @@ def generate_sql(
         range_option: Optional revision range to generate SQL for (e.g., 'head', 'head:base')
         specific_revisions: Optional list of specific revision IDs to generate SQL for
     """
-    if not os.path.exists(alembic_ini):
-        logger.error(f"Error: alembic.ini not found at {alembic_ini}")
-        sys.exit(1)
-
     try:
-        # If specific revisions are provided and range_option isn't specified by the user,
-        # generate SQL for each specific revision
-        if specific_revisions and (range_option == "head" or range_option is None):
-            all_sql = []
-            for revision in specific_revisions:
-                logger.info(f"Generating SQL for revision: {revision}")
-
-                # Get the revision before this one to see just this revision's changes
-                prev_revision_cmd = [
-                    "alembic",
-                    "-c",
-                    alembic_ini,
-                    "history",
-                    "-r",
-                    f"{revision}:base",
-                    "--verbose",
-                ]
-
-                try:
-                    prev_result = subprocess.run(
-                        prev_revision_cmd, capture_output=True, text=True, check=True
-                    )
-
-                    # Parse output to find the previous revision
-                    prev_revision = None
-                    for line in prev_result.stdout.splitlines():
-                        if f"({revision})" in line:
-                            continue  # Skip the current revision
-                        if "->" in line:
-                            # Found a previous revision
-                            parts = line.split("->")
-                            if len(parts) >= 2:
-                                prev_rev_part = parts[0].strip()
-                                # Extract revision ID
-                                prev_revision = prev_rev_part.split()[0]
-                                break
-
-                    # If we found the previous revision
-                    if prev_revision:
-                        # Build command for just this specific migration
-                        single_command = [
-                            "alembic",
-                            "-c",
-                            alembic_ini,
-                            "upgrade",
-                            f"{prev_revision}:{revision}",
-                            "--sql",
-                        ]
-
-                        # Alembic doesn't directly support a --dialect flag
-                        # We'll modify the environment variables instead
-                        env = os.environ.copy()
-                        env["ALEMBIC_DIALECT"] = dialect
-
-                        logger.info(f"Executing: {' '.join(single_command)}")
-
-                        # Capture SQL for this revision
-                        result = subprocess.run(
-                            single_command, capture_output=True, text=True, check=True, env=env
-                        )
-
-                        # Add a header for this revision
-                        all_sql.append(f"\n-- Migration: {revision} --\n")
-                        all_sql.append(result.stdout)
-                except subprocess.CalledProcessError as e:
-                    logger.error(f"Error getting previous revision for {revision}: {e}")
-                    # Fallback to "base" if we can't determine the previous revision
-                    single_command = [
-                        "alembic",
-                        "-c",
-                        alembic_ini,
-                        "upgrade",
-                        f"{revision}:{revision}",
-                        "--sql",
-                    ]
-
-                    env = os.environ.copy()
-                    env["ALEMBIC_DIALECT"] = dialect
-
-                    logger.info(f"Fallback - Executing: {' '.join(single_command)}")
-
-                    result = subprocess.run(
-                        single_command, capture_output=True, text=True, check=True, env=env
-                    )
-
-                    all_sql.append(f"\n-- Migration: {revision} --\n")
-                    all_sql.append(result.stdout)
-
-            # Write all the collected SQL to the output file
-            with open("generated.sql", "w") as output_file:
-                output_file.write("".join(all_sql))
-
-            logger.info(
-                "SQL generation for specific revisions completed. Output saved to generated.sql."
-            )
-            return
-
-        # If no specific revisions or a range was explicitly specified, use the standard approach
-        command = [
-            "alembic",
-            "-c",
-            alembic_ini,
-            "upgrade",
-            range_option or "head",
-            "--sql",
-        ]
-
-        # Alembic doesn't directly support a --dialect flag
-        # We'll modify the environment variables instead
-        env = os.environ.copy()
-        env["ALEMBIC_DIALECT"] = dialect
-
-        logger.info(f"Executing: {' '.join(command)}")
-
-        # For tests, we need to match the expected call
-        if "pytest" in sys.modules:
-            subprocess.run(command, check=True, env=env)
-        else:
-            with open("generated.sql", "w") as output_file:
-                subprocess.run(command, check=True, stdout=output_file, env=env)
-
-        logger.info("SQL generation completed. Output saved to generated.sql.")
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Error generating SQL: {e}")
+        generator = SQLGenerator(dialect, alembic_ini, migration_path)
+        generator.generate_sql(range_option, specific_revisions)
+    except FileNotFoundError as e:
+        logger.error(f"Error: {e}")
         sys.exit(1)
 
 
