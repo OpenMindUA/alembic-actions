@@ -1,0 +1,38 @@
+name: "Alembic Actions"
+description: "Collection of GitHub Actions for managing Alembic database migrations in CI/CD workflows"
+
+branding:
+  icon: "database"
+  color: "blue"
+
+# This is a "main" action that directs users to use the specific sub-actions
+runs:
+  using: "composite"
+  steps:
+    - name: Install repository
+      shell: bash
+      run: |
+        # Install the package to make shared scripts available
+        pip install -e .
+        
+    - name: Show usage information
+      shell: bash
+      run: |
+        echo "========================================================================"
+        echo "Alembic Actions - Usage Guide"
+        echo "========================================================================"
+        echo ""
+        echo "This action is a collection of individual actions for Alembic migrations."
+        echo "Please use one of the specific actions directly in your workflow:"
+        echo ""
+        echo "1. Alembic Review - Generate SQL for review:"
+        echo "   uses: OpenMindUA/alembic-actions/actions/alembic-review@v1"
+        echo ""
+        echo "2. Alembic Test - Test migrations:"
+        echo "   uses: OpenMindUA/alembic-actions/actions/alembic-test@v1"
+        echo ""
+        echo "3. Alembic Deploy - Deploy migrations:"
+        echo "   uses: OpenMindUA/alembic-actions/actions/alembic-deploy@v1"
+        echo ""
+        echo "For more information, visit: https://github.com/OpenMindUA/alembic-actions"
+        echo "========================================================================"
