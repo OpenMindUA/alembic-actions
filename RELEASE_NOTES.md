@@ -22,7 +22,7 @@ See [PERMISSIONS.md](./PERMISSIONS.md) for more details.
 Before users can reference the actions as shown in the documentation:
 
 ```yaml
-uses: OpenMindUA/alembic-actions/actions/alembic-review@v1
+uses: OpenMindUA/alembic-actions/review@v1
 ```
 
 You need to create a version tag and release:
@@ -48,7 +48,7 @@ While developing, contributors can reference the local actions directly in their
 
 ```yaml
 - name: Check Alembic Migrations
-  uses: ./actions/alembic-review
+  uses: ./review
 ```
 
 This allows testing without requiring a published release.
