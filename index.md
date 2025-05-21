@@ -19,7 +19,7 @@ Each action can be used independently in your GitHub workflow files. Simply refe
 
 ```yaml
 - name: Check Alembic Migrations
-  uses: OpenMindUA/alembic-actions/actions/alembic-review@v1
+  uses: OpenMindUA/alembic-actions/review@v1
 ```
 
 ## Available Actions
@@ -28,19 +28,19 @@ Each action can be used independently in your GitHub workflow files. Simply refe
 
 The `alembic-review` action checks for Alembic migrations in a pull request, generates SQL for the specified dialect, and adds the SQL as a comment to the pull request.
 
-[View Action Documentation](./actions/alembic-review/README.md)
+[View Action Documentation](./review/README.md)
 
 ### Alembic Test
 
 The `alembic-test` action runs tests for Alembic migrations to ensure they work correctly. It creates a test database, applies migrations, and verifies that they can be both applied and reversed.
 
-[View Action Documentation](./actions/alembic-test/README.md)
+[View Action Documentation](./test/README.md)
 
 ### Alembic Deploy
 
 The `alembic-deploy` action safely applies Alembic migrations to a production or staging database with optional backup creation.
 
-[View Action Documentation](./actions/alembic-deploy/README.md)
+[View Action Documentation](./deploy/README.md)
 
 ## Examples
 
@@ -68,7 +68,7 @@ jobs:
           fetch-depth: 0
 
       - name: Generate SQL for Review
-        uses: OpenMindUA/alembic-actions/actions/alembic-review@v1
+        uses: OpenMindUA/alembic-actions/review@v1
         with:
           dialect: "postgresql"
           alembic_ini: "alembic.ini"
@@ -85,7 +85,7 @@ jobs:
         run: docker-compose up -d db-test
 
       - name: Test Migrations
-        uses: OpenMindUA/alembic-actions/actions/alembic-test@v1
+        uses: OpenMindUA/alembic-actions/test@v1
         with:
           dialect: "postgresql"
           alembic_ini: "alembic.ini"
@@ -101,7 +101,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Deploy Migrations
-        uses: OpenMindUA/alembic-actions/actions/alembic-deploy@v1
+        uses: OpenMindUA/alembic-actions/deploy@v1
         with:
           dialect: "postgresql"
           alembic_ini: "alembic.ini"

@@ -63,7 +63,7 @@ jobs:
           fetch-depth: 0  # Important for detecting changes
 
       - name: Check Alembic Migrations and Generate SQL
-        uses: OpenMindUA/alembic-actions/actions/alembic-review@v1
+        uses: OpenMindUA/alembic-actions/review@v1
         with:
           dialect: "postgresql"
           alembic_ini: "alembic.ini"
@@ -104,7 +104,7 @@ jobs:
           python -m pip install -e .
 
       - name: Check Alembic Migrations and Generate SQL
-        uses: OpenMindUA/alembic-actions/actions/alembic-review@v1
+        uses: OpenMindUA/alembic-actions/review@v1
         with:
           dialect: "mysql"
           alembic_ini: "./config/alembic.ini"
@@ -121,7 +121,7 @@ If you want to show the full migration history up to the current HEAD, set `pr_r
 
 ```yaml
 - name: Check Alembic Migrations and Generate SQL (Full History)
-  uses: OpenMindUA/alembic-actions/actions/alembic-review@v1
+  uses: OpenMindUA/alembic-actions/review@v1
   with:
     dialect: "postgresql"
     alembic_ini: "alembic.ini"

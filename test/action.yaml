@@ -49,7 +49,7 @@ runs:
       id: check_migrations
       shell: bash
       run: |
-        uv run python ${{ github.action_path }}/../../shared/scripts/generate_sql.py --check-migrations --migration-path ${{ inputs.migration_path }} --verbose
+        uv run python ${{ github.action_path }}/../shared/scripts/generate_sql.py --check-migrations --migration-path ${{ inputs.migration_path }} --verbose
 
     - name: Set up test database
       if: steps.check_migrations.outputs.has_migrations == 'true'

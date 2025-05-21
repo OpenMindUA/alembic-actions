@@ -74,7 +74,7 @@ runs:
       id: generate_sql
       shell: bash
       run: |
-        uv run python ${{ github.action_path }}/../../shared/scripts/generate_sql.py \
+        uv run python ${{ github.action_path }}/../shared/scripts/generate_sql.py \
           --generate-sql \
           --dialect ${{ inputs.dialect }} \
           --alembic-ini ${{ inputs.alembic_ini }} \

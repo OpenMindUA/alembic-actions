@@ -5,34 +5,85 @@ branding:
   icon: "database"
   color: "blue"
 
-# This is a "main" action that directs users to use the specific sub-actions
+inputs:
+  action:
+    description: "Which action to run: 'review', 'test', or 'deploy'"
+    required: true
+  dialect:
+    description: "SQL dialect to use for Alembic (postgresql, mysql, etc.)"
+    required: false
+    default: "postgresql"
+  alembic_ini:
+    description: "Path to alembic.ini file"
+    required: false
+    default: "alembic.ini"
+  migration_path:
+    description: "Path to Alembic migrations directory"
+    required: false
+    default: "migrations"
+  revision_range:
+    description: "Optional revision range for SQL generation (e.g., 'head:base')"
+    required: false
+    default: "head"
+  pr_revisions_only:
+    description: "Only generate SQL for migrations in the current PR (true/false)"
+    required: false
+    default: "true"
+  database_url:
+    description: "Database URL for testing/deploying migrations"
+    required: false
+  test_data_script:
+    description: "Optional script to load test data (test action only)"
+    required: false
+  backup:
+    description: "Whether to create a database backup before applying migrations (deploy action only)"
+    required: false
+    default: "true"
+  target_revision:
+    description: "Target revision to migrate to (deploy action only, default: head)"
+    required: false
+    default: "head"
+
 runs:
   using: "composite"
   steps:
-    - name: Install repository
+    - name: Validate action input
       shell: bash
       run: |
-        # Install the package to make shared scripts available
-        pip install -e .
-        
-    - name: Show usage information
-      shell: bash
-      run: |
-        echo "========================================================================"
-        echo "Alembic Actions - Usage Guide"
-        echo "========================================================================"
-        echo ""
-        echo "This action is a collection of individual actions for Alembic migrations."
-        echo "Please use one of the specific actions directly in your workflow:"
-        echo ""
-        echo "1. Alembic Review - Generate SQL for review:"
-        echo "   uses: OpenMindUA/alembic-actions/actions/alembic-review@v1"
-        echo ""
-        echo "2. Alembic Test - Test migrations:"
-        echo "   uses: OpenMindUA/alembic-actions/actions/alembic-test@v1"
-        echo ""
-        echo "3. Alembic Deploy - Deploy migrations:"
-        echo "   uses: OpenMindUA/alembic-actions/actions/alembic-deploy@v1"
-        echo ""
-        echo "For more information, visit: https://github.com/OpenMindUA/alembic-actions"
-        echo "========================================================================"
+        if [[ "${{ inputs.action }}" != "review" && "${{ inputs.action }}" != "test" && "${{ inputs.action }}" != "deploy" ]]; then
+          echo "Error: action must be one of: 'review', 'test', 'deploy'"
+          echo "Received: '${{ inputs.action }}'"
+          exit 1
+        fi
+        echo "Running Alembic ${{ inputs.action }} action"
+
+    - name: Call Alembic Review
+      if: inputs.action == 'review'
+      uses: ./review
+      with:
+        dialect: ${{ inputs.dialect }}
+        alembic_ini: ${{ inputs.alembic_ini }}
+        migration_path: ${{ inputs.migration_path }}
+        revision_range: ${{ inputs.revision_range }}
+        pr_revisions_only: ${{ inputs.pr_revisions_only }}
+
+    - name: Call Alembic Test
+      if: inputs.action == 'test'
+      uses: ./test
+      with:
+        dialect: ${{ inputs.dialect }}
+        alembic_ini: ${{ inputs.alembic_ini }}
+        migration_path: ${{ inputs.migration_path }}
+        database_url: ${{ inputs.database_url }}
+        test_data_script: ${{ inputs.test_data_script }}
+
+    - name: Call Alembic Deploy
+      if: inputs.action == 'deploy'
+      uses: ./deploy
+      with:
+        dialect: ${{ inputs.dialect }}
+        alembic_ini: ${{ inputs.alembic_ini }}
+        migration_path: ${{ inputs.migration_path }}
+        database_url: ${{ inputs.database_url }}
+        backup: ${{ inputs.backup }}
+        target_revision: ${{ inputs.target_revision }}
