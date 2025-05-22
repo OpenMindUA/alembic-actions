@@ -16,6 +16,55 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
+def get_default_branch() -> str:
+    """
+    Dynamically detect the default branch name.
+
+    Returns:
+        The name of the default branch (e.g., 'main', 'master', 'staging', 'develop')
+    """
+    try:
+        # Get the default branch from remote HEAD
+        result = subprocess.run(
+            ["git", "symbolic-ref", "refs/remotes/origin/HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        # Extract branch name from refs/remotes/origin/branch_name
+        return result.stdout.strip().split("/")[-1]
+    except subprocess.CalledProcessError:
+        pass
+
+    try:
+        # Fallback: try to determine from remote branches
+        result = subprocess.run(
+            ["git", "branch", "-r"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        remote_branches = result.stdout.strip().split("\n")
+
+        # Look for common default branch names in priority order
+        for branch in remote_branches:
+            branch = branch.strip()
+            if branch == "origin/main":
+                return "main"
+            elif branch == "origin/master":
+                return "master"
+            elif branch == "origin/staging":
+                return "staging"
+            elif branch == "origin/develop":
+                return "develop"
+    except subprocess.CalledProcessError:
+        pass
+
+    # Final fallback
+    logger.warning("Could not detect default branch, using 'main' as fallback")
+    return "main"
+
+
 def get_databases_from_config(alembic_ini: str) -> List[str]:
     """
     Extract database names from alembic.ini configuration.
@@ -482,9 +531,12 @@ class MigrationManager:
             return self._migrations_cache
 
         try:
+            # Get the default branch name dynamically
+            default_branch = get_default_branch()
+
             # Get changed files from git
             result = subprocess.run(
-                ["git", "diff", "--name-only", "origin/main...HEAD"],
+                ["git", "diff", "--name-only", f"origin/{default_branch}...HEAD"],
                 capture_output=True,
                 text=True,
                 check=True,

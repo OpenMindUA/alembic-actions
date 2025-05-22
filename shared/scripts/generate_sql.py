@@ -10,6 +10,7 @@ try:
         MigrationManager,
         _build_alembic_command,
         get_databases_from_config,
+        get_default_branch,
         get_migration_order,
         get_migrations_from_pr,
         resolve_database_name,
@@ -20,6 +21,7 @@ except ImportError:
         MigrationManager,
         _build_alembic_command,
         get_databases_from_config,
+        get_default_branch,
         get_migration_order,
         get_migrations_from_pr,
         resolve_database_name,
@@ -41,8 +43,11 @@ def check_migrations(migration_path="migrations", database=None):
         A tuple of (has_migrations, changed_migration_files)
     """
     try:
+        # Get the default branch name dynamically
+        default_branch = get_default_branch()
+
         result = subprocess.run(
-            ["git", "diff", "--name-only", "origin/main...HEAD"],
+            ["git", "diff", "--name-only", f"origin/{default_branch}...HEAD"],
             capture_output=True,
             text=True,
             check=True,
