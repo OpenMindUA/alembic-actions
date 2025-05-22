@@ -12,3 +12,5 @@ dist/
 build/
 venv/
 .env
+
+**/CLAUDE.local.md

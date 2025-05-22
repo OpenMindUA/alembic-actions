@@ -6,15 +6,22 @@ import sys
 from typing import Dict, List, Optional
 
 try:
-    from .alembic_utils import MigrationManager, get_migration_order, get_migrations_from_pr, _build_alembic_command, get_databases_from_config, resolve_database_name
+    from .alembic_utils import (
+        MigrationManager,
+        _build_alembic_command,
+        get_databases_from_config,
+        get_migration_order,
+        get_migrations_from_pr,
+        resolve_database_name,
+    )
 except ImportError:
     # For when the module is run directly
     from alembic_utils import (  # type: ignore
         MigrationManager,
-        get_migration_order,
-        get_migrations_from_pr,
         _build_alembic_command,
         get_databases_from_config,
+        get_migration_order,
+        get_migrations_from_pr,
         resolve_database_name,
     )
 
@@ -94,7 +101,13 @@ def check_migrations(migration_path="migrations", database=None):
 class SQLGenerator:
     """Generates SQL from Alembic migrations."""
 
-    def __init__(self, dialect: str, alembic_ini: str, migration_path: str = "migrations", database: Optional[str] = None):
+    def __init__(
+        self,
+        dialect: str,
+        alembic_ini: str,
+        migration_path: str = "migrations",
+        database: Optional[str] = None,
+    ):
         self.dialect = dialect
         self.alembic_ini = alembic_ini
         self.database = database
@@ -105,7 +118,9 @@ class SQLGenerator:
 
     def _build_alembic_command(self, range_spec: str) -> List[str]:
         """Build an alembic upgrade command with SQL output."""
-        return _build_alembic_command(["upgrade", range_spec, "--sql"], self.alembic_ini, self.database)
+        return _build_alembic_command(
+            ["upgrade", range_spec, "--sql"], self.alembic_ini, self.database
+        )
 
     def _get_environment(self) -> Dict[str, str]:
         """Get environment variables for alembic command."""
@@ -248,7 +263,12 @@ class SQLGenerator:
 
 
 def generate_sql(
-    dialect, alembic_ini, migration_path="migrations", range_option=None, specific_revisions=None, database=None
+    dialect,
+    alembic_ini,
+    migration_path="migrations",
+    range_option=None,
+    specific_revisions=None,
+    database=None,
 ):
     """
     Generate SQL from Alembic migrations.

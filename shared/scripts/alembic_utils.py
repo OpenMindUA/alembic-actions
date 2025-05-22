@@ -37,17 +37,18 @@ def get_databases_from_config(alembic_ini: str) -> List[str]:
         databases = []
 
         # Method 1: Check for explicit 'databases' setting in [alembic] section
-        if config.has_section('alembic') and config.has_option('alembic', 'databases'):
-            databases_str = config.get('alembic', 'databases')
-            databases = [db.strip() for db in databases_str.split(',')]
+        if config.has_section("alembic") and config.has_option("alembic", "databases"):
+            databases_str = config.get("alembic", "databases")
+            databases = [db.strip() for db in databases_str.split(",")]
             logger.info(f"Found databases from 'databases' setting: {databases}")
             return databases
 
         # Method 2: Look for sections with sqlalchemy.url (excluding alembic and DEFAULT)
-        excluded_sections = {'alembic', 'DEFAULT'}
+        excluded_sections = {"alembic", "DEFAULT"}
         for section_name in config.sections():
-            if (section_name not in excluded_sections and
-                config.has_option(section_name, 'sqlalchemy.url')):
+            if section_name not in excluded_sections and config.has_option(
+                section_name, "sqlalchemy.url"
+            ):
                 databases.append(section_name)
 
         if databases:
@@ -87,7 +88,9 @@ def resolve_database_name(alembic_ini: str, database: Optional[str] = None) -> O
             logger.info(f"Using specified database: {database}")
             return database
         else:
-            logger.error(f"Database '{database}' not found in config. Available: {available_databases}")
+            logger.error(
+                f"Database '{database}' not found in config. Available: {available_databases}"
+            )
             raise ValueError(f"Database '{database}' not found in configuration")
 
     # Auto-select first database for single operations
@@ -122,7 +125,9 @@ def get_databases_for_deploy(alembic_ini: str, database: Optional[str] = None) -
             logger.info(f"Deploy to specified database: {database}")
             return [database]
         else:
-            logger.error(f"Database '{database}' not found in config. Available: {available_databases}")
+            logger.error(
+                f"Database '{database}' not found in config. Available: {available_databases}"
+            )
             raise ValueError(f"Database '{database}' not found in configuration")
 
     # For deploy without specific database, return all databases
@@ -130,7 +135,9 @@ def get_databases_for_deploy(alembic_ini: str, database: Optional[str] = None) -
     return available_databases
 
 
-def _build_alembic_command(base_cmd: List[str], alembic_ini: str, database: Optional[str] = None) -> List[str]:
+def _build_alembic_command(
+    base_cmd: List[str], alembic_ini: str, database: Optional[str] = None
+) -> List[str]:
     """
     Build an alembic command with optional database name.
 
@@ -183,7 +190,9 @@ def get_current_revision(alembic_ini: str, database: Optional[str] = None) -> st
         return "None"
 
 
-def get_migration_history(alembic_ini: str, database: Optional[str] = None) -> List[Tuple[str, str]]:
+def get_migration_history(
+    alembic_ini: str, database: Optional[str] = None
+) -> List[Tuple[str, str]]:
     """
     Get the migration history as a list of (key, value) tuples.
 
@@ -238,7 +247,9 @@ def validate_migrations(alembic_ini: str, dialect: str, database: Optional[str] 
 
     try:
         # Try to generate SQL - if it fails, migrations are invalid
-        command = _build_alembic_command(["upgrade", "head", "--sql", f"--dialect={dialect}"], alembic_ini, database)
+        command = _build_alembic_command(
+            ["upgrade", "head", "--sql", f"--dialect={dialect}"], alembic_ini, database
+        )
         result = subprocess.run(command, capture_output=True, text=True, check=True)
         return True
     except subprocess.CalledProcessError as e:
@@ -588,7 +599,9 @@ class MigrationManager:
 
 
 # Backward compatibility functions
-def get_migrations_from_pr(migration_path: str = "migrations", database: Optional[str] = None) -> Dict[str, MigrationInfo]:
+def get_migrations_from_pr(
+    migration_path: str = "migrations", database: Optional[str] = None
+) -> Dict[str, MigrationInfo]:
     """Get migration information for all migrations in the current PR."""
     manager = MigrationManager(migration_path, database)
     return manager.get_migrations_from_pr()
