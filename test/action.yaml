@@ -14,6 +14,9 @@ inputs:
     description: "Path to Alembic migrations directory"
     required: true
     default: "migrations"
+  database:
+    description: "Database name for multi-database setup (optional)"
+    required: false
   database_url:
     description: "Database URL for testing migrations"
     required: true
@@ -49,7 +52,11 @@ runs:
       id: check_migrations
       shell: bash
       run: |
-        uv run python ${{ github.action_path }}/../shared/scripts/generate_sql.py --check-migrations --migration-path ${{ inputs.migration_path }} --verbose
+        DATABASE_ARG=""
+        if [ -n "${{ inputs.database }}" ]; then
+          DATABASE_ARG="--database ${{ inputs.database }}"
+        fi
+        uv run python ${{ github.action_path }}/../shared/scripts/generate_sql.py --check-migrations --migration-path ${{ inputs.migration_path }} $DATABASE_ARG --verbose
 
     - name: Set up test database
       if: steps.check_migrations.outputs.has_migrations == 'true'
@@ -67,7 +74,11 @@ runs:
         sed -i "s|sqlalchemy.url = .*|sqlalchemy.url = ${{ inputs.database_url }}|g" ${{ inputs.alembic_ini }}
 
         # Run the migrations
-        uv run alembic -c ${{ inputs.alembic_ini }} upgrade head
+        ALEMBIC_CMD="uv run alembic -c ${{ inputs.alembic_ini }}"
+        if [ -n "${{ inputs.database }}" ]; then
+          ALEMBIC_CMD="$ALEMBIC_CMD --name ${{ inputs.database }}"
+        fi
+        $ALEMBIC_CMD upgrade head
 
         # Load test data if provided
         if [ -n "${{ inputs.test_data_script }}" ]; then
@@ -79,9 +90,13 @@ runs:
       shell: bash
       run: |
         # Test that migrations can be downgraded
-        uv run alembic -c ${{ inputs.alembic_ini }} downgrade base
+        ALEMBIC_CMD="uv run alembic -c ${{ inputs.alembic_ini }}"
+        if [ -n "${{ inputs.database }}" ]; then
+          ALEMBIC_CMD="$ALEMBIC_CMD --name ${{ inputs.database }}"
+        fi
+        $ALEMBIC_CMD downgrade base
 
         # Test that they can be re-applied
-        uv run alembic -c ${{ inputs.alembic_ini }} upgrade head
+        $ALEMBIC_CMD upgrade head
 
         echo "Migration tests successful"
