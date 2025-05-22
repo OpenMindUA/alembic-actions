@@ -14,6 +14,9 @@ inputs:
     description: "Path to Alembic migrations directory"
     required: true
     default: "migrations"
+  database:
+    description: "Database name for multi-database setup (optional)"
+    required: false
   database_url:
     description: "Database URL to apply migrations to (will override alembic.ini)"
     required: true
@@ -74,26 +77,69 @@ runs:
       id: generate_sql
       shell: bash
       run: |
+        DATABASE_ARG=""
+        if [ -n "${{ inputs.database }}" ]; then
+          DATABASE_ARG="--database ${{ inputs.database }}"
+        fi
+
         uv run python ${{ github.action_path }}/../shared/scripts/generate_sql.py \
           --generate-sql \
           --dialect ${{ inputs.dialect }} \
           --alembic-ini ${{ inputs.alembic_ini }} \
           --migration-path ${{ inputs.migration_path }} \
           --revision-range ${{ inputs.target_revision }} \
+          $DATABASE_ARG \
           --verbose
 
     - name: Apply migrations
       shell: bash
       run: |
-        # Override the database URL in alembic.ini
-        sed -i "s|sqlalchemy.url = .*|sqlalchemy.url = ${{ inputs.database_url }}|g" ${{ inputs.alembic_ini }}
+        # Import utility functions to determine databases
+        DATABASES_TO_DEPLOY=$(uv run python -c "
+        import sys
+        sys.path.append('${{ github.action_path }}/../shared/scripts')
+        from alembic_utils import get_databases_for_deploy
+        databases = get_databases_for_deploy('${{ inputs.alembic_ini }}', '${{ inputs.database }}' if '${{ inputs.database }}' else None)
+        print(' '.join(databases) if databases else '')
+        ")
 
-        echo "Applying Alembic migrations to target: ${{ inputs.target_revision }}"
-        uv run alembic -c ${{ inputs.alembic_ini }} upgrade ${{ inputs.target_revision }}
+        if [ -z "$DATABASES_TO_DEPLOY" ]; then
+          # Single database deployment
+          echo "Applying Alembic migrations to single database, target: ${{ inputs.target_revision }}"
 
-        # Get current revision after migration
-        CURRENT_REVISION=$(uv run alembic -c ${{ inputs.alembic_ini }} current)
-        echo "Current database revision: $CURRENT_REVISION"
+          # Override the database URL in alembic.ini
+          sed -i "s|sqlalchemy.url = .*|sqlalchemy.url = ${{ inputs.database_url }}|g" ${{ inputs.alembic_ini }}
 
-        # Set output for other workflow steps
-        echo "current_revision=$CURRENT_REVISION" >> $GITHUB_OUTPUT
+          uv run alembic -c ${{ inputs.alembic_ini }} upgrade ${{ inputs.target_revision }}
+
+          # Get current revision after migration
+          CURRENT_REVISION=$(uv run alembic -c ${{ inputs.alembic_ini }} current)
+          echo "Current database revision: $CURRENT_REVISION"
+          echo "current_revision=$CURRENT_REVISION" >> $GITHUB_OUTPUT
+        else
+          # Multi-database deployment
+          echo "Applying Alembic migrations to databases: $DATABASES_TO_DEPLOY"
+          echo "Target revision: ${{ inputs.target_revision }}"
+
+          ALL_REVISIONS=""
+
+          for DB in $DATABASES_TO_DEPLOY; do
+            echo "=== Deploying to database: $DB ==="
+
+            # For multi-DB, we assume the URL is configured in alembic.ini sections
+            # Override only if a single database_url is provided for all
+            if [ -n "${{ inputs.database_url }}" ]; then
+              echo "Warning: Single database_url provided for multi-database setup"
+              echo "Consider using section-specific URLs in alembic.ini"
+            fi
+
+            uv run alembic -c ${{ inputs.alembic_ini }} --name $DB upgrade ${{ inputs.target_revision }}
+
+            # Get current revision after migration
+            CURRENT_REVISION=$(uv run alembic -c ${{ inputs.alembic_ini }} --name $DB current)
+            echo "Database $DB current revision: $CURRENT_REVISION"
+            ALL_REVISIONS="$ALL_REVISIONS$DB:$CURRENT_REVISION "
+          done
+
+          echo "current_revision=$ALL_REVISIONS" >> $GITHUB_OUTPUT
+        fi

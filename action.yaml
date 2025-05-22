@@ -21,6 +21,9 @@ inputs:
     description: "Path to Alembic migrations directory"
     required: false
     default: "migrations"
+  database:
+    description: "Database name for multi-database setup (optional)"
+    required: false
   revision_range:
     description: "Optional revision range for SQL generation (e.g., 'head:base')"
     required: false
@@ -64,6 +67,7 @@ runs:
         dialect: ${{ inputs.dialect }}
         alembic_ini: ${{ inputs.alembic_ini }}
         migration_path: ${{ inputs.migration_path }}
+        database: ${{ inputs.database }}
         revision_range: ${{ inputs.revision_range }}
         pr_revisions_only: ${{ inputs.pr_revisions_only }}
 
@@ -74,6 +78,7 @@ runs:
         dialect: ${{ inputs.dialect }}
         alembic_ini: ${{ inputs.alembic_ini }}
         migration_path: ${{ inputs.migration_path }}
+        database: ${{ inputs.database }}
         database_url: ${{ inputs.database_url }}
         test_data_script: ${{ inputs.test_data_script }}
 
@@ -84,6 +89,7 @@ runs:
         dialect: ${{ inputs.dialect }}
         alembic_ini: ${{ inputs.alembic_ini }}
         migration_path: ${{ inputs.migration_path }}
+        database: ${{ inputs.database }}
         database_url: ${{ inputs.database_url }}
         backup: ${{ inputs.backup }}
         target_revision: ${{ inputs.target_revision }}

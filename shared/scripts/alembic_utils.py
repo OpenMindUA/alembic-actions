@@ -3,6 +3,7 @@ Utility functions for working with Alembic migrations.
 """
 
 import ast
+import configparser
 import logging
 import os
 import re
@@ -15,12 +16,156 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
-def get_current_revision(alembic_ini: str) -> str:
+def get_databases_from_config(alembic_ini: str) -> List[str]:
+    """
+    Extract database names from alembic.ini configuration.
+
+    Args:
+        alembic_ini: Path to alembic.ini file
+
+    Returns:
+        List of database names found in the configuration
+    """
+    if not os.path.exists(alembic_ini):
+        logger.warning(f"alembic.ini not found at {alembic_ini}")
+        return []
+
+    try:
+        config = configparser.ConfigParser()
+        config.read(alembic_ini)
+
+        databases = []
+
+        # Method 1: Check for explicit 'databases' setting in [alembic] section
+        if config.has_section("alembic") and config.has_option("alembic", "databases"):
+            databases_str = config.get("alembic", "databases")
+            databases = [db.strip() for db in databases_str.split(",")]
+            logger.info(f"Found databases from 'databases' setting: {databases}")
+            return databases
+
+        # Method 2: Look for sections with sqlalchemy.url (excluding alembic and DEFAULT)
+        excluded_sections = {"alembic", "DEFAULT"}
+        for section_name in config.sections():
+            if section_name not in excluded_sections and config.has_option(
+                section_name, "sqlalchemy.url"
+            ):
+                databases.append(section_name)
+
+        if databases:
+            logger.info(f"Found databases from sections with sqlalchemy.url: {databases}")
+        else:
+            logger.info("No multi-database configuration found, assuming single database")
+
+        return databases
+
+    except Exception as e:
+        logger.error(f"Error parsing alembic.ini: {e}")
+        return []
+
+
+def resolve_database_name(alembic_ini: str, database: Optional[str] = None) -> Optional[str]:
+    """
+    Resolve the database name to use for operations.
+
+    Args:
+        alembic_ini: Path to alembic.ini file
+        database: Explicitly specified database name (optional)
+
+    Returns:
+        Database name to use, or None for single-database setup
+    """
+    available_databases = get_databases_from_config(alembic_ini)
+
+    # If no multi-database setup found, return None (single DB)
+    if not available_databases:
+        if database:
+            logger.warning(f"Database '{database}' specified but no multi-database config found")
+        return None
+
+    # If database explicitly specified, validate it
+    if database:
+        if database in available_databases:
+            logger.info(f"Using specified database: {database}")
+            return database
+        else:
+            logger.error(
+                f"Database '{database}' not found in config. Available: {available_databases}"
+            )
+            raise ValueError(f"Database '{database}' not found in configuration")
+
+    # Auto-select first database for single operations
+    selected = available_databases[0]
+    logger.info(f"Auto-selected database: {selected} (from {available_databases})")
+    return selected
+
+
+def get_databases_for_deploy(alembic_ini: str, database: Optional[str] = None) -> List[str]:
+    """
+    Get list of databases for deploy operation.
+    For deploy, if no specific database is given, return all databases.
+
+    Args:
+        alembic_ini: Path to alembic.ini file
+        database: Explicitly specified database name (optional)
+
+    Returns:
+        List of database names to deploy to
+    """
+    available_databases = get_databases_from_config(alembic_ini)
+
+    # If no multi-database setup found, return empty list (single DB)
+    if not available_databases:
+        if database:
+            logger.warning(f"Database '{database}' specified but no multi-database config found")
+        return []
+
+    # If database explicitly specified, return just that one
+    if database:
+        if database in available_databases:
+            logger.info(f"Deploy to specified database: {database}")
+            return [database]
+        else:
+            logger.error(
+                f"Database '{database}' not found in config. Available: {available_databases}"
+            )
+            raise ValueError(f"Database '{database}' not found in configuration")
+
+    # For deploy without specific database, return all databases
+    logger.info(f"Deploy to all databases: {available_databases}")
+    return available_databases
+
+
+def _build_alembic_command(
+    base_cmd: List[str], alembic_ini: str, database: Optional[str] = None
+) -> List[str]:
+    """
+    Build an alembic command with optional database name.
+
+    Args:
+        base_cmd: Base alembic command (e.g., ['current'], ['upgrade', 'head'])
+        alembic_ini: Path to alembic.ini file
+        database: Optional database name for multi-database setup
+
+    Returns:
+        Complete alembic command list
+    """
+    # Resolve the actual database name to use
+    resolved_database = resolve_database_name(alembic_ini, database)
+
+    cmd = ["alembic", "-c", alembic_ini]
+    if resolved_database:
+        cmd.extend(["--name", resolved_database])
+    cmd.extend(base_cmd)
+    return cmd
+
+
+def get_current_revision(alembic_ini: str, database: Optional[str] = None) -> str:
     """
     Get the current revision of the database.
 
     Args:
         alembic_ini: Path to alembic.ini file
+        database: Optional database name for multi-database setup
 
     Returns:
         The current revision or "None" if no revision
@@ -30,9 +175,8 @@ def get_current_revision(alembic_ini: str) -> str:
         return "None"
 
     try:
-        result = subprocess.run(
-            ["alembic", "-c", alembic_ini, "current"], capture_output=True, text=True, check=True
-        )
+        command = _build_alembic_command(["current"], alembic_ini, database)
+        result = subprocess.run(command, capture_output=True, text=True, check=True)
         # Parse the output to extract the revision ID
         output = result.stdout
         if "head" in output:
@@ -46,12 +190,15 @@ def get_current_revision(alembic_ini: str) -> str:
         return "None"
 
 
-def get_migration_history(alembic_ini: str) -> List[Tuple[str, str]]:
+def get_migration_history(
+    alembic_ini: str, database: Optional[str] = None
+) -> List[Tuple[str, str]]:
     """
     Get the migration history as a list of (key, value) tuples.
 
     Args:
         alembic_ini: Path to alembic.ini file
+        database: Optional database name for multi-database setup
 
     Returns:
         List of tuples containing revision information
@@ -61,9 +208,8 @@ def get_migration_history(alembic_ini: str) -> List[Tuple[str, str]]:
         return []
 
     try:
-        result = subprocess.run(
-            ["alembic", "-c", alembic_ini, "history"], capture_output=True, text=True, check=True
-        )
+        command = _build_alembic_command(["history"], alembic_ini, database)
+        result = subprocess.run(command, capture_output=True, text=True, check=True)
 
         # Extract revision information from lines like "Rev: abcd123 (head): add users table"
         history = []
@@ -83,13 +229,14 @@ def get_migration_history(alembic_ini: str) -> List[Tuple[str, str]]:
         return []
 
 
-def validate_migrations(alembic_ini: str, dialect: str) -> bool:
+def validate_migrations(alembic_ini: str, dialect: str, database: Optional[str] = None) -> bool:
     """
     Validates migrations by checking if they can be compiled to SQL.
 
     Args:
         alembic_ini: Path to alembic.ini file
         dialect: SQL dialect to use
+        database: Optional database name for multi-database setup
 
     Returns:
         True if all migrations are valid, False otherwise
@@ -100,12 +247,10 @@ def validate_migrations(alembic_ini: str, dialect: str) -> bool:
 
     try:
         # Try to generate SQL - if it fails, migrations are invalid
-        result = subprocess.run(
-            ["alembic", "-c", alembic_ini, "upgrade", "head", "--sql", f"--dialect={dialect}"],
-            capture_output=True,
-            text=True,
-            check=True,
+        command = _build_alembic_command(
+            ["upgrade", "head", "--sql", f"--dialect={dialect}"], alembic_ini, database
         )
+        result = subprocess.run(command, capture_output=True, text=True, check=True)
         return True
     except subprocess.CalledProcessError as e:
         logger.error(f"Error validating migrations: {e}")
@@ -322,8 +467,13 @@ def parse_migration_file(file_path: str) -> Optional[MigrationInfo]:
 class MigrationManager:
     """Manages Alembic migrations for a project."""
 
-    def __init__(self, migration_path: str = "migrations"):
-        self.migration_path = migration_path
+    def __init__(self, migration_path: str = "migrations", database: Optional[str] = None):
+        self.database = database
+        # If database is specified, adjust migration path for multi-database structure
+        if database:
+            self.migration_path = f"{migration_path}/databases/{database}"
+        else:
+            self.migration_path = migration_path
         self._migrations_cache: Optional[Dict[str, MigrationInfo]] = None
 
     def get_migrations_from_pr(self) -> Dict[str, MigrationInfo]:
@@ -449,9 +599,11 @@ class MigrationManager:
 
 
 # Backward compatibility functions
-def get_migrations_from_pr(migration_path: str = "migrations") -> Dict[str, MigrationInfo]:
+def get_migrations_from_pr(
+    migration_path: str = "migrations", database: Optional[str] = None
+) -> Dict[str, MigrationInfo]:
     """Get migration information for all migrations in the current PR."""
-    manager = MigrationManager(migration_path)
+    manager = MigrationManager(migration_path, database)
     return manager.get_migrations_from_pr()
 
 

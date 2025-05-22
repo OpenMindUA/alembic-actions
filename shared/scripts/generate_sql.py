@@ -6,13 +6,23 @@ import sys
 from typing import Dict, List, Optional
 
 try:
-    from .alembic_utils import MigrationManager, get_migration_order, get_migrations_from_pr
+    from .alembic_utils import (
+        MigrationManager,
+        _build_alembic_command,
+        get_databases_from_config,
+        get_migration_order,
+        get_migrations_from_pr,
+        resolve_database_name,
+    )
 except ImportError:
     # For when the module is run directly
     from alembic_utils import (  # type: ignore
         MigrationManager,
+        _build_alembic_command,
+        get_databases_from_config,
         get_migration_order,
         get_migrations_from_pr,
+        resolve_database_name,
     )
 
 # Setup logging
@@ -20,7 +30,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
-def check_migrations(migration_path="migrations"):
+def check_migrations(migration_path="migrations", database=None):
     """
     Check if there are any Alembic migrations in the PR.
 
@@ -38,9 +48,17 @@ def check_migrations(migration_path="migrations"):
             check=True,
         )
         changed_files = result.stdout.splitlines()
-        changed_migration_files = [
-            file for file in changed_files if file.startswith(f"{migration_path}/")
-        ]
+        # For multi-database setup, check the specific database path
+        if database:
+            db_migration_path = f"{migration_path}/databases/{database}/"
+            changed_migration_files = [
+                file for file in changed_files if file.startswith(db_migration_path)
+            ]
+        else:
+            # Single database or backward compatibility
+            changed_migration_files = [
+                file for file in changed_files if file.startswith(f"{migration_path}/")
+            ]
         has_migrations = len(changed_migration_files) > 0
 
         # Extract revision IDs from changed migration files
@@ -83,17 +101,26 @@ def check_migrations(migration_path="migrations"):
 class SQLGenerator:
     """Generates SQL from Alembic migrations."""
 
-    def __init__(self, dialect: str, alembic_ini: str, migration_path: str = "migrations"):
+    def __init__(
+        self,
+        dialect: str,
+        alembic_ini: str,
+        migration_path: str = "migrations",
+        database: Optional[str] = None,
+    ):
         self.dialect = dialect
         self.alembic_ini = alembic_ini
-        self.migration_manager = MigrationManager(migration_path)
+        self.database = database
+        self.migration_manager = MigrationManager(migration_path, database)
 
         if not os.path.exists(alembic_ini):
             raise FileNotFoundError(f"alembic.ini not found at {alembic_ini}")
 
     def _build_alembic_command(self, range_spec: str) -> List[str]:
         """Build an alembic upgrade command with SQL output."""
-        return ["alembic", "-c", self.alembic_ini, "upgrade", range_spec, "--sql"]
+        return _build_alembic_command(
+            ["upgrade", range_spec, "--sql"], self.alembic_ini, self.database
+        )
 
     def _get_environment(self) -> Dict[str, str]:
         """Get environment variables for alembic command."""
@@ -194,7 +221,7 @@ class SQLGenerator:
     def _generate_fallback_sql(self, revision: str) -> str:
         """Generate SQL for a revision using fallback alembic commands."""
         # First check if revision exists
-        check_cmd = ["alembic", "-c", self.alembic_ini, "show", revision]
+        check_cmd = _build_alembic_command(["show", revision], self.alembic_ini, self.database)
         subprocess.run(check_cmd, capture_output=True, text=True, check=True)
 
         # Generate SQL
@@ -236,7 +263,12 @@ class SQLGenerator:
 
 
 def generate_sql(
-    dialect, alembic_ini, migration_path="migrations", range_option=None, specific_revisions=None
+    dialect,
+    alembic_ini,
+    migration_path="migrations",
+    range_option=None,
+    specific_revisions=None,
+    database=None,
 ):
     """
     Generate SQL from Alembic migrations.
@@ -249,7 +281,7 @@ def generate_sql(
         specific_revisions: Optional list of specific revision IDs to generate SQL for
     """
     try:
-        generator = SQLGenerator(dialect, alembic_ini, migration_path)
+        generator = SQLGenerator(dialect, alembic_ini, migration_path, database)
         generator.generate_sql(range_option, specific_revisions)
     except FileNotFoundError as e:
         logger.error(f"Error: {e}")
@@ -271,6 +303,11 @@ def main():
         type=str,
         default="migrations",
         help="Path to Alembic migrations directory.",
+    )
+    parser.add_argument(
+        "--database",
+        type=str,
+        help="Database name for multi-database setup (optional)",
     )
     parser.add_argument(
         "--revision-range", type=str, help="Optional revision range (e.g., 'head:base')"
@@ -295,7 +332,7 @@ def main():
 
     if args.check_migrations:
         # Return value not used here, but may be useful for other scripts
-        return check_migrations(args.migration_path)
+        return check_migrations(args.migration_path, args.database)
     elif args.generate_sql:
         if not args.dialect or not args.alembic_ini:
             logger.error("Error: --dialect and --alembic-ini are required for SQL generation.")
@@ -305,7 +342,7 @@ def main():
 
         # If --pr-revisions-only is specified, get revisions from the PR
         if args.pr_revisions_only:
-            has_migrations, pr_revisions = check_migrations(args.migration_path)
+            has_migrations, pr_revisions = check_migrations(args.migration_path, args.database)
             if has_migrations and pr_revisions:
                 specific_revisions = pr_revisions
                 logger.info(f"Using revisions from PR: {specific_revisions}")
@@ -323,6 +360,7 @@ def main():
             args.migration_path,
             args.revision_range,
             specific_revisions,
+            args.database,
         )
     else:
         parser.print_help()

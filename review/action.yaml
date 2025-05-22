@@ -18,6 +18,9 @@ inputs:
     description: "Path to Alembic migrations directory"
     required: true
     default: "migrations"
+  database:
+    description: "Database name for multi-database setup (optional)"
+    required: false
   revision_range:
     description: "Optional revision range for SQL generation (e.g., 'head:base')"
     required: false
@@ -55,7 +58,11 @@ runs:
       id: check_migrations
       shell: bash
       run: |
-        uv run python ${{ github.action_path }}/../shared/scripts/generate_sql.py --check-migrations --migration-path ${{ inputs.migration_path }} --verbose
+        DATABASE_ARG=""
+        if [ -n "${{ inputs.database }}" ]; then
+          DATABASE_ARG="--database ${{ inputs.database }}"
+        fi
+        uv run python ${{ github.action_path }}/../shared/scripts/generate_sql.py --check-migrations --migration-path ${{ inputs.migration_path }} $DATABASE_ARG --verbose
 
     - name: Generate SQL from Alembic migrations
       if: steps.check_migrations.outputs.has_migrations == 'true'
@@ -68,11 +75,17 @@ runs:
           PR_ONLY="--pr-revisions-only"
         fi
 
+        DATABASE_ARG=""
+        if [ -n "${{ inputs.database }}" ]; then
+          DATABASE_ARG="--database ${{ inputs.database }}"
+        fi
+
         uv run python ${{ github.action_path }}/../shared/scripts/generate_sql.py --generate-sql \
           --dialect ${{ inputs.dialect }} \
           --alembic-ini ${{ inputs.alembic_ini }} \
           --migration-path ${{ inputs.migration_path }} \
           --revision-range ${{ inputs.revision_range }} \
+          $DATABASE_ARG \
           $PR_ONLY \
           --verbose
 

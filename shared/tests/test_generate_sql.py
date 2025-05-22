@@ -243,7 +243,7 @@ def test_generate_sql_with_pr_migrations():
         )
 
         # Verify that MigrationManager was instantiated correctly
-        mock_manager_class.assert_called_once_with("migrations")
+        mock_manager_class.assert_called_once_with("migrations", None)
 
         # Verify that get_migrations_from_pr was called
         mock_manager.get_migrations_from_pr.assert_called()
