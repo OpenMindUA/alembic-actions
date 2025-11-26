@@ -34,12 +34,12 @@ runs:
   using: "composite"
   steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: "3.x"
 
@@ -91,7 +91,7 @@ runs:
 
     - name: Add SQL to PR comment
       if: steps.check_migrations.outputs.has_migrations == 'true'
-      uses: actions/github-script@v6
+      uses: actions/github-script@v7
       with:
         script: |
           const fs = require('fs');
