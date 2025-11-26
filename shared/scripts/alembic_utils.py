@@ -407,7 +407,7 @@ def _parse_revision_from_ast(
 ) -> Tuple[Optional[str], Optional[Union[str, List[str]]]]:
     """Extract revision info from AST."""
     revision = None
-    down_revision = None
+    down_revision: Optional[Union[str, List[str]]] = None
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign):
@@ -415,16 +415,20 @@ def _parse_revision_from_ast(
                 if isinstance(target, ast.Name):
                     if target.id == "revision":
                         if isinstance(node.value, ast.Constant):
-                            revision = node.value.value
+                            revision = (
+                                str(node.value.value) if node.value.value is not None else None
+                            )
                     elif target.id == "down_revision":
                         if isinstance(node.value, ast.Constant):
-                            down_revision = node.value.value
+                            down_revision = (
+                                str(node.value.value) if node.value.value is not None else None
+                            )
                         elif isinstance(node.value, (ast.Tuple, ast.List)):
                             # Handle tuple/list of revisions (merge migrations)
                             down_revisions = []
                             for elt in node.value.elts:
                                 if isinstance(elt, ast.Constant) and elt.value:
-                                    down_revisions.append(elt.value)
+                                    down_revisions.append(str(elt.value))
                             down_revision = down_revisions if down_revisions else None
 
     return revision, down_revision

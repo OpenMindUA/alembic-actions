@@ -13,9 +13,11 @@ def test_check_migrations_with_github_output():
     mock_env = {"GITHUB_OUTPUT": "/tmp/github_output"}
     mock_file = mock_open()
 
-    with patch.dict(os.environ, mock_env), patch("builtins.open", mock_file), patch(
-        "subprocess.run"
-    ) as mock_run:
+    with (
+        patch.dict(os.environ, mock_env),
+        patch("builtins.open", mock_file),
+        patch("subprocess.run") as mock_run,
+    ):
 
         mock_run.return_value.stdout = "migrations/001_initial.py\nother_file.txt\n"
         mock_run.return_value.returncode = 0
@@ -27,9 +29,12 @@ def test_check_migrations_with_github_output():
 
 def test_check_migrations_without_github_output():
     """Test check_migrations without GITHUB_OUTPUT (local development)."""
-    with patch.dict(os.environ, {}, clear=True), patch("subprocess.run") as mock_run, patch(
-        "logging.Logger.info"
-    ) as mock_log, patch("builtins.print") as mock_print:
+    with (
+        patch.dict(os.environ, {}, clear=True),
+        patch("subprocess.run") as mock_run,
+        patch("logging.Logger.info") as mock_log,
+        patch("builtins.print") as mock_print,
+    ):
 
         mock_run.return_value.stdout = "migrations/001_initial.py\nother_file.txt\n"
         mock_run.return_value.returncode = 0
@@ -42,9 +47,11 @@ def test_check_migrations_without_github_output():
 
 def test_check_migrations_custom_path():
     """Test check_migrations with custom migration path."""
-    with patch.dict(os.environ, {}, clear=True), patch("subprocess.run") as mock_run, patch(
-        "builtins.print"
-    ) as mock_print:
+    with (
+        patch.dict(os.environ, {}, clear=True),
+        patch("subprocess.run") as mock_run,
+        patch("builtins.print") as mock_print,
+    ):
 
         mock_run.return_value.stdout = "custom_path/001_initial.py\nother_file.txt\n"
         mock_run.return_value.returncode = 0
@@ -56,9 +63,11 @@ def test_check_migrations_custom_path():
 
 def test_check_migrations_no_changes():
     """Test check_migrations with no migration changes."""
-    with patch.dict(os.environ, {}, clear=True), patch("subprocess.run") as mock_run, patch(
-        "builtins.print"
-    ) as mock_print:
+    with (
+        patch.dict(os.environ, {}, clear=True),
+        patch("subprocess.run") as mock_run,
+        patch("builtins.print") as mock_print,
+    ):
 
         mock_run.return_value.stdout = "other_file.txt\n"
         mock_run.return_value.returncode = 0
@@ -70,9 +79,10 @@ def test_check_migrations_no_changes():
 
 def test_check_migrations_error():
     """Test error handling in check_migrations."""
-    with patch("subprocess.run", side_effect=subprocess.CalledProcessError(1, "cmd")), patch(
-        "logging.Logger.error"
-    ) as mock_log:
+    with (
+        patch("subprocess.run", side_effect=subprocess.CalledProcessError(1, "cmd")),
+        patch("logging.Logger.error") as mock_log,
+    ):
 
         with pytest.raises(SystemExit):
             check_migrations()
@@ -82,9 +92,12 @@ def test_check_migrations_error():
 
 def test_generate_sql_success():
     """Test successful SQL generation."""
-    with patch("os.path.exists", return_value=True), patch("subprocess.run") as mock_run, patch(
-        "builtins.open", mock_open()
-    ), patch("logging.Logger.info") as mock_log:
+    with (
+        patch("os.path.exists", return_value=True),
+        patch("subprocess.run") as mock_run,
+        patch("builtins.open", mock_open()),
+        patch("logging.Logger.info") as mock_log,
+    ):
 
         generate_sql("postgresql", "migrations/alembic.ini")
 
@@ -117,8 +130,10 @@ def test_generate_sql_success():
 
 def test_generate_sql_with_custom_options():
     """Test SQL generation with custom options."""
-    with patch("os.path.exists", return_value=True), patch("subprocess.run") as mock_run, patch(
-        "builtins.open", mock_open()
+    with (
+        patch("os.path.exists", return_value=True),
+        patch("subprocess.run") as mock_run,
+        patch("builtins.open", mock_open()),
     ):
 
         generate_sql(
@@ -167,9 +182,11 @@ def test_generate_sql_subprocess_error():
     """Test error handling when subprocess fails."""
     error = subprocess.CalledProcessError(1, "cmd")
 
-    with patch("os.path.exists", return_value=True), patch(
-        "subprocess.run", side_effect=error
-    ), patch("logging.Logger.error") as mock_log:
+    with (
+        patch("os.path.exists", return_value=True),
+        patch("subprocess.run", side_effect=error),
+        patch("logging.Logger.error") as mock_log,
+    ):
 
         with pytest.raises(SystemExit):
             generate_sql("postgresql", "migrations/alembic.ini")
@@ -179,9 +196,13 @@ def test_generate_sql_subprocess_error():
 
 def test_generate_sql_with_nonexistent_revision():
     """Test handling of specific revisions that don't exist in migration history."""
-    with patch("os.path.exists", return_value=True), patch("subprocess.run") as mock_run, patch(
-        "builtins.open", mock_open()
-    ), patch("logging.Logger.warning") as mock_warning, patch("logging.Logger.error") as mock_error:
+    with (
+        patch("os.path.exists", return_value=True),
+        patch("subprocess.run") as mock_run,
+        patch("builtins.open", mock_open()),
+        patch("logging.Logger.warning") as mock_warning,
+        patch("logging.Logger.error") as mock_error,
+    ):
 
         # Mock the subprocess calls to simulate revision not found scenario
         def subprocess_side_effect(command, **kwargs):
@@ -215,9 +236,12 @@ def test_generate_sql_with_pr_migrations():
     """Test generating SQL using PR migration parsing."""
     from shared.scripts.alembic_utils import MigrationInfo
 
-    with patch("os.path.exists", return_value=True), patch("subprocess.run") as mock_run, patch(
-        "builtins.open", mock_open()
-    ) as mock_file, patch("shared.scripts.generate_sql.MigrationManager") as mock_manager_class:
+    with (
+        patch("os.path.exists", return_value=True),
+        patch("subprocess.run") as mock_run,
+        patch("builtins.open", mock_open()) as mock_file,
+        patch("shared.scripts.generate_sql.MigrationManager") as mock_manager_class,
+    ):
 
         # Create mock manager instance
         mock_manager = MagicMock()
@@ -281,9 +305,12 @@ def test_generate_sql_with_merge_migration():
     """Test generating SQL for merge migrations."""
     from shared.scripts.alembic_utils import MigrationInfo
 
-    with patch("os.path.exists", return_value=True), patch("subprocess.run") as mock_run, patch(
-        "builtins.open", mock_open()
-    ) as mock_file, patch("shared.scripts.generate_sql.MigrationManager") as mock_manager_class:
+    with (
+        patch("os.path.exists", return_value=True),
+        patch("subprocess.run") as mock_run,
+        patch("builtins.open", mock_open()) as mock_file,
+        patch("shared.scripts.generate_sql.MigrationManager") as mock_manager_class,
+    ):
 
         # Create mock manager instance
         mock_manager = MagicMock()

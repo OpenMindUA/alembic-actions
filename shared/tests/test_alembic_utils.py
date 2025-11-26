@@ -111,9 +111,11 @@ def test_validate_migrations_success():
 
 def test_validate_migrations_failure():
     """Test failed migration validation."""
-    with patch("os.path.exists", return_value=True), patch(
-        "subprocess.run", side_effect=subprocess.CalledProcessError(1, "cmd")
-    ), patch("logging.Logger.error") as mock_log:
+    with (
+        patch("os.path.exists", return_value=True),
+        patch("subprocess.run", side_effect=subprocess.CalledProcessError(1, "cmd")),
+        patch("logging.Logger.error") as mock_log,
+    ):
 
         result = validate_migrations("test/alembic.ini", "postgresql")
         assert result is False
@@ -224,9 +226,10 @@ def test_get_default_branch_develop_fallback():
 
 def test_get_default_branch_final_fallback():
     """Test final fallback to 'main' when all detection methods fail."""
-    with patch("subprocess.run", side_effect=subprocess.CalledProcessError(1, "cmd")), patch(
-        "logging.Logger.warning"
-    ) as mock_log:
+    with (
+        patch("subprocess.run", side_effect=subprocess.CalledProcessError(1, "cmd")),
+        patch("logging.Logger.warning") as mock_log,
+    ):
 
         result = get_default_branch()
         assert result == "main"

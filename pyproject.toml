@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     {name = "Contributors"}
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 license = {text = "MIT"}
 dependencies = [
     "alembic>=1.7.0",
@@ -45,10 +45,10 @@ line_length = 100
 
 [tool.black]
 line-length = 100
-target-version = ["py38"]
+target-version = ["py39", "py310", "py311", "py312", "py313"]
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.9"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false

@@ -268,9 +268,11 @@ def test_get_migrations_from_pr():
         "migrations/versions/001_initial.py\nmigrations/versions/002_add_users.py\nother_file.txt\n"
     )
 
-    with patch("subprocess.run") as mock_run, patch("os.path.exists", return_value=True), patch(
-        "builtins.open"
-    ) as mock_open:
+    with (
+        patch("subprocess.run") as mock_run,
+        patch("os.path.exists", return_value=True),
+        patch("builtins.open") as mock_open,
+    ):
 
         mock_run.return_value.stdout = mock_git_output
         mock_run.return_value.returncode = 0
