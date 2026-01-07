@@ -54,15 +54,25 @@ def check_migrations(migration_path="migrations", database=None):
         )
         changed_files = result.stdout.splitlines()
         # For multi-database setup, check the specific database path
+        # Filter only actual migration files: .py files in versions/ directory
         if database:
             db_migration_path = f"{migration_path}/databases/{database}/"
             changed_migration_files = [
-                file for file in changed_files if file.startswith(db_migration_path)
+                file
+                for file in changed_files
+                if file.startswith(db_migration_path)
+                and "/versions/" in file
+                and file.endswith(".py")
             ]
         else:
             # Single database or backward compatibility
+            # Only include .py files in versions/ directory (ignore env.py, script.py.mako, etc.)
             changed_migration_files = [
-                file for file in changed_files if file.startswith(f"{migration_path}/")
+                file
+                for file in changed_files
+                if file.startswith(f"{migration_path}/")
+                and "/versions/" in file
+                and file.endswith(".py")
             ]
         has_migrations = len(changed_migration_files) > 0
 
@@ -352,7 +362,15 @@ def main():
                 specific_revisions = pr_revisions
                 logger.info(f"Using revisions from PR: {specific_revisions}")
             else:
-                logger.info("No migration revisions found in PR, falling back to standard behavior")
+                # Don't fallback to generating ALL migrations - skip SQL generation instead
+                logger.warning(
+                    "No migration revisions found in PR (no .py files in versions/ directory), "
+                    "skipping SQL generation"
+                )
+                # Create empty output file to signal no SQL was generated
+                with open("generated.sql", "w") as f:
+                    f.write("")
+                sys.exit(0)
 
         # If --specific-revisions is provided, it takes precedence
         if args.specific_revisions:

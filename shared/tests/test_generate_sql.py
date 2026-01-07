@@ -18,8 +18,8 @@ def test_check_migrations_with_github_output():
         patch("builtins.open", mock_file),
         patch("subprocess.run") as mock_run,
     ):
-
-        mock_run.return_value.stdout = "migrations/001_initial.py\nother_file.txt\n"
+        # Use correct path format: migrations/versions/*.py
+        mock_run.return_value.stdout = "migrations/versions/001_initial.py\nother_file.txt\n"
         mock_run.return_value.returncode = 0
 
         check_migrations()
@@ -35,8 +35,8 @@ def test_check_migrations_without_github_output():
         patch("logging.Logger.info") as mock_log,
         patch("builtins.print") as mock_print,
     ):
-
-        mock_run.return_value.stdout = "migrations/001_initial.py\nother_file.txt\n"
+        # Use correct path format: migrations/versions/*.py
+        mock_run.return_value.stdout = "migrations/versions/001_initial.py\nother_file.txt\n"
         mock_run.return_value.returncode = 0
 
         check_migrations()
@@ -52,8 +52,8 @@ def test_check_migrations_custom_path():
         patch("subprocess.run") as mock_run,
         patch("builtins.print") as mock_print,
     ):
-
-        mock_run.return_value.stdout = "custom_path/001_initial.py\nother_file.txt\n"
+        # Use correct path format: custom_path/versions/*.py
+        mock_run.return_value.stdout = "custom_path/versions/001_initial.py\nother_file.txt\n"
         mock_run.return_value.returncode = 0
 
         check_migrations(migration_path="custom_path")
@@ -75,6 +75,66 @@ def test_check_migrations_no_changes():
         check_migrations()
 
         mock_print.assert_called_with("has_migrations=false")
+
+
+def test_check_migrations_ignores_env_py():
+    """Test that check_migrations ignores env.py and other non-version files."""
+    with (
+        patch.dict(os.environ, {}, clear=True),
+        patch("subprocess.run") as mock_run,
+        patch("builtins.print") as mock_print,
+    ):
+        # env.py should be ignored (not in versions/ directory)
+        mock_run.return_value.stdout = "migrations/env.py\nmigrations/script.py.mako\n"
+        mock_run.return_value.returncode = 0
+
+        check_migrations()
+
+        mock_print.assert_called_with("has_migrations=false")
+
+
+def test_check_migrations_ignores_non_py_files():
+    """Test that check_migrations ignores non-.py files in versions/."""
+    with (
+        patch.dict(os.environ, {}, clear=True),
+        patch("subprocess.run") as mock_run,
+        patch("builtins.print") as mock_print,
+    ):
+        # Non-.py files should be ignored even if in versions/
+        mock_run.return_value.stdout = (
+            "migrations/versions/README.md\nmigrations/versions/.gitkeep\n"
+        )
+        mock_run.return_value.returncode = 0
+
+        check_migrations()
+
+        mock_print.assert_called_with("has_migrations=false")
+
+
+def test_check_migrations_mixed_files():
+    """Test check_migrations with mix of migration and non-migration files."""
+    mock_env = {"GITHUB_OUTPUT": "/tmp/github_output"}
+    mock_file = mock_open()
+
+    with (
+        patch.dict(os.environ, mock_env),
+        patch("builtins.open", mock_file),
+        patch("subprocess.run") as mock_run,
+    ):
+        # Mix of files - only versions/*.py should count
+        mock_run.return_value.stdout = (
+            "migrations/env.py\n"
+            "migrations/versions/abc123_create_users.py\n"
+            "migrations/script.py.mako\n"
+            "migrations/versions/README.md\n"
+        )
+        mock_run.return_value.returncode = 0
+
+        has_migrations, revisions = check_migrations()
+
+        assert has_migrations is True
+        assert "abc123" in revisions
+        mock_file().write.assert_any_call("has_migrations=true\n")
 
 
 def test_check_migrations_error():
